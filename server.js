@@ -13,7 +13,7 @@ const cors       = require('cors');
 
 const BOT_TOKEN  = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL;
-const PORT       = process.env.PORT || 3000;
+const PORT       = process.env.PORT || 8080;
 
 if (!BOT_TOKEN) { console.error('❌ BOT_TOKEN не задан!'); process.exit(1); }
 if (!WEBAPP_URL) { console.error('❌ WEBAPP_URL не задан!'); process.exit(1); }
