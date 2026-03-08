@@ -402,20 +402,19 @@ bot.start(async (ctx) => {
   await sendBunkerMessage(ctx);
 });
 
-// /bunker (латиница — основная, всегда работает в группах)
+// /бункер — кириллица (ГЛАВНАЯ команда)
+bot.command('бункер', async (ctx) => {
+  await sendBunkerMessage(ctx);
+});
+
+// /bunker — латиница
 bot.command('bunker', async (ctx) => {
   await sendBunkerMessage(ctx);
 });
 
-// /newgame
-bot.command('newgame', async (ctx) => {
-  await sendBunkerMessage(ctx);
-});
-
-// /game
-bot.command('game', async (ctx) => {
-  await sendBunkerMessage(ctx);
-});
+// /newgame, /game — алиасы
+bot.command('newgame', async (ctx) => { await sendBunkerMessage(ctx); });
+bot.command('game',    async (ctx) => { await sendBunkerMessage(ctx); });
 
 // /join XXXX
 bot.command('join', async (ctx) => {
@@ -442,7 +441,7 @@ bot.command('rooms', async (ctx) => {
 
 // ── Ловим текстовые триггеры в группах ──
 // Срабатывает если написать "бункер" или "бункер!" или "@botname bunker" и т.д.
-bot.hears(/^[\/!]?(бункер|bunker|бунк|игра|game)(!|@\w+)?$/i, async (ctx) => {
+bot.hears(/^(бункер|bunker|бунк)(@\w+)?$/i, async (ctx) => {
   await sendBunkerMessage(ctx);
 });
 
@@ -621,9 +620,8 @@ server.listen(PORT, async () => {
     console.log('✅ Webhook установлен');
 
     const cmds = [
-      { command: 'bunker',  description: '☢ Создать игру / Create game' },
-      { command: 'newgame', description: '▶ Новая игра' },
-      { command: 'game',    description: '🎮 Открыть игру' },
+      { command: 'бункер',  description: '☢ Создать игру' },
+      { command: 'bunker',  description: '☢ Create game (English)' },
       { command: 'join',    description: '→ Войти по коду: /join XXXX' },
       { command: 'rooms',   description: '📋 Активные комнаты' },
     ];
