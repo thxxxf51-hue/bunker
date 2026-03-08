@@ -11,9 +11,10 @@ const http       = require('http');
 const path       = require('path');
 const cors       = require('cors');
 
-const BOT_TOKEN  = process.env.BOT_TOKEN;
-const WEBAPP_URL = process.env.WEBAPP_URL;
-const PORT       = process.env.PORT || 8080;
+const BOT_TOKEN      = process.env.BOT_TOKEN;
+const WEBAPP_URL     = process.env.WEBAPP_URL;
+const TELEGRAPH_URL  = process.env.TELEGRAPH_URL || `${process.env.WEBAPP_URL}/rules.html`;
+const PORT       = process.env.PORT || 3000;
 
 if (!BOT_TOKEN) { console.error('❌ BOT_TOKEN не задан!'); process.exit(1); }
 if (!WEBAPP_URL) { console.error('❌ WEBAPP_URL не задан!'); process.exit(1); }
@@ -365,56 +366,89 @@ app.get('/api/rooms/:code', (req, res) => {
 // ═══════════════════════════════════════════════
 const bot = new Telegraf(BOT_TOKEN);
 
+// ── Главное сообщение с кнопкой игры ──
+async function sendBunkerMessage(ctx) {
+  const chatId = ctx.chat.id;
+  const text =
+    `☢ *БУНКЕР* — игра на выживание\n\n` +
+    `Мир погибает\\. В бункере ограниченное количество мест\\.\n` +
+    `Убеди остальных, что ты нужен — или останешься снаружи\\.\n\n` +
+    `👥 *4–8 игроков*\n` +
+    `🃏 *Случайные персонажи*\n` +
+    `💬 *Дебаты \\+ тайное голосование*\n` +
+    `☠ *Каждый раунд кто\\-то выбывает*`;
+
+  try {
+    await ctx.reply(text, {
+      parse_mode: 'MarkdownV2',
+      ...Markup.inlineKeyboard([
+        [Markup.button.webApp('🏚 Создать игру', `${WEBAPP_URL}?chatId=${chatId}`)],
+        [Markup.button.url('📖 Правила', telegraphUrl)],
+      ]),
+    });
+  } catch (e) {
+    // fallback без markdown если ошибка
+    await ctx.reply('☢ БУНКЕР — игра на выживание\n\n4–8 игроков · Дебаты · Тайное голосование', {
+      ...Markup.inlineKeyboard([
+        [Markup.button.webApp('🏚 Создать игру', `${WEBAPP_URL}?chatId=${chatId}`)],
+        [Markup.button.url('📖 Правила', telegraphUrl)],
+      ]),
+    });
+  }
+}
+
 // /start
 bot.start(async (ctx) => {
-  const isGroup = ctx.chat.type !== 'private';
-  await ctx.reply(
-    `☢ *БУНКЕР* — игра выживания\n\nПостапокалиптическая игра на дебаты для 4–8 игроков.\n\n${isGroup ? '👇 Создайте игру для этого чата:' : '👇 Откройте игру:'}`,
-    {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        [Markup.button.webApp('🏚 Создать игру', `${WEBAPP_URL}?chatId=${ctx.chat.id}`)],
-        [Markup.button.url('📖 Правила', `${WEBAPP_URL}/rules.html`)],
-      ])
-    }
-  );
+  await sendBunkerMessage(ctx);
 });
 
-// /newgame — в группе создаёт новую игру
+// /bunker (латиница — основная, всегда работает в группах)
+bot.command('bunker', async (ctx) => {
+  await sendBunkerMessage(ctx);
+});
+
+// /newgame
 bot.command('newgame', async (ctx) => {
-  await ctx.reply(
-    `☢ *БУНКЕР — Новая игра*\n\nНажмите кнопку чтобы создать комнату:`,
-    {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        [Markup.button.webApp('✚ Создать комнату', `${WEBAPP_URL}?chatId=${ctx.chat.id}`)],
-      ])
-    }
-  );
+  await sendBunkerMessage(ctx);
 });
 
-// /join — войти по коду
+// /game
+bot.command('game', async (ctx) => {
+  await sendBunkerMessage(ctx);
+});
+
+// /join XXXX
 bot.command('join', async (ctx) => {
   const code = ctx.message.text.split(' ')[1]?.toUpperCase();
-  const url = code ? `${WEBAPP_URL}/game.html?room=${code}` : `${WEBAPP_URL}`;
-  await ctx.reply(
-    code ? `☢ Войти в комнату *${code}*:` : `☢ Введите код: /join XXXX`,
-    {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        [Markup.button.webApp(code ? `→ Войти в ${code}` : '→ Открыть игру', url)],
-      ])
-    }
-  );
+  if (!code || code.length !== 4) {
+    await ctx.reply('Укажи код: /join XXXX');
+    return;
+  }
+  await ctx.reply(`☢ Войти в комнату ${code}:`, {
+    ...Markup.inlineKeyboard([
+      [Markup.button.webApp(`→ Войти в ${code}`, `${WEBAPP_URL}/game.html?room=${code}`)],
+    ]),
+  });
 });
 
-// /rooms — список активных комнат (только для дебага)
+// /rooms — дебаг
 bot.command('rooms', async (ctx) => {
   if (rooms.size === 0) { await ctx.reply('Нет активных комнат'); return; }
   const list = [...rooms.values()].map(r =>
-    `• \`${r.code}\` · ${r.players.length} игроков · ${r.phase}`
+    `• ${r.code} · ${r.players.length} игроков · ${r.phase}`
   ).join('\n');
-  await ctx.reply(`☢ Активные комнаты:\n${list}`, { parse_mode: 'Markdown' });
+  await ctx.reply(`☢ Активные комнаты:\n${list}`);
+});
+
+// ── Ловим текстовые триггеры в группах ──
+// Срабатывает если написать "бункер" или "бункер!" или "@botname bunker" и т.д.
+bot.hears(/^[\/!]?(бункер|bunker|бунк|игра|game)(!|@\w+)?$/i, async (ctx) => {
+  await sendBunkerMessage(ctx);
+});
+
+// Ловим ошибки — чтобы бот не крашился
+bot.catch((err, ctx) => {
+  console.error(`Bot error [${ctx?.updateType}]:`, err.message);
 });
 
 // ── Send notification to Telegram chat ──
@@ -440,21 +474,166 @@ const WEBHOOK_PATH = `/webhook/${BOT_TOKEN}`;
 app.use(WEBHOOK_PATH, (req, res) => bot.handleUpdate(req.body, res));
 
 // ═══════════════════════════════════════════════
+//   AUTO-CREATE TELEGRAPH PAGE
+// ═══════════════════════════════════════════════
+const https = require('https');
+
+let telegraphUrl = TELEGRAPH_URL;
+
+function telegraphRequest(method, data) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(data);
+    const req = https.request({
+      hostname: 'api.telegra.ph',
+      path: `/${method}`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    }, (res) => {
+      let raw = '';
+      res.on('data', d => raw += d);
+      res.on('end', () => { try { resolve(JSON.parse(raw)); } catch { resolve({}); } });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+async function createTelegraphPage() {
+  // Если уже задан через env — не создаём
+  if (process.env.TELEGRAPH_URL) {
+    telegraphUrl = process.env.TELEGRAPH_URL;
+    console.log('✅ Telegraph URL из env:', telegraphUrl);
+    return;
+  }
+
+  console.log('📝 Создаём страницу правил на Telegraph...');
+  try {
+    const account = await telegraphRequest('createAccount', {
+      short_name: 'Bunker Game',
+      author_name: 'БУНКЕР — игра выживания',
+      author_url: WEBAPP_URL,
+    });
+    if (!account.ok) throw new Error(account.error);
+    const token = account.result.access_token;
+
+    const content = [
+      { tag: 'p', children: ['☢ Постапокалиптическая игра на дебаты для 4–8 игроков. Мир погибает — в бункере ограниченное количество мест. Убеди остальных, что ты нужен, или останешься снаружи.'] },
+      { tag: 'hr' },
+      { tag: 'h3', children: ['🏚 Цель игры'] },
+      { tag: 'p', children: ['Каждый игрок получает случайного персонажа с уникальными характеристиками. Раскрывая их по одной за раунд — убеждай остальных, что именно ты достоин места в бункере. Кто не убедил — выбывает.'] },
+      { tag: 'hr' },
+      { tag: 'h3', children: ['👥 Участники'] },
+      { tag: 'p', children: ['4 до 8 игроков. Хост создаёт комнату и задаёт параметры: количество мест в бункере, число раундов, время на дебаты. Остальные входят по 4-значному коду.'] },
+      { tag: 'hr' },
+      { tag: 'h3', children: ['🃏 Карточки персонажа'] },
+      { tag: 'p', children: ['Каждый получает 7 характеристик. Они скрыты — раскрываются по одной за раунд:'] },
+      { tag: 'ul', children: [
+        { tag: 'li', children: [{ tag: 'b', children: ['Раунд 1 — 👤 Профессия.'] }, ' Хирург, Биолог, Мародёр, Инженер...'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['Раунд 2 — 🎂 Возраст.'] }, ' От 8 лет до 75. Влияет на выносливость и опыт.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['Раунд 3 — ❤️ Здоровье.'] }, ' Абсолютно здоров, Астма, Диабет, Беременность...'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['Раунд 4 — 🎯 Хобби.'] }, ' Огородничество, Стрельба, Радиолюбитель...'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['Раунд 5 — 🔧 Навык.'] }, ' Чинит генераторы, Знает 3 языка, Первая помощь...'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['Раунд 6 — 🧬 Биоданные.'] }, ' Семья, дети, особые обстоятельства.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['Раунд 7 — 🧠 Личное качество.'] }, ' Лидер, Паникёр, Манипулятор...'] },
+      ]},
+      { tag: 'hr' },
+      { tag: 'h3', children: ['🔄 Ход игры'] },
+      { tag: 'ol', children: [
+        { tag: 'li', children: [{ tag: 'b', children: ['Раунд начинается.'] }, ' Все одновременно видят одну новую карту.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['⏱ Дебаты.'] }, ' Пока идёт таймер — обсуждайте голосом. Голосование заблокировано.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['🗳 Тайное голосование.'] }, ' Таймер истёк — все голосуют в приложении. Кто наберёт больше голосов — выбывает.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['☠ Исключение.'] }, ' Выбывший уходит. Его карточка раскрывается всем.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['🏆 Финал.'] }, ' Когда остаётся столько игроков, сколько мест — они победили.'] },
+      ]},
+      { tag: 'hr' },
+      { tag: 'h3', children: ['✨ Спецкарты (1 раз за игру)'] },
+      { tag: 'ul', children: [
+        { tag: 'li', children: [{ tag: 'b', children: ['🛡 Иммунитет'] }, ' — нельзя исключить в этом раунде.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['🔍 Разведка'] }, ' — узнать одну скрытую карту любого игрока.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['🗣 Двойной голос'] }, ' — твой голос считается за два.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['📣 Обвинение'] }, ' — принудительно раскрыть карту соперника.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['🎭 Маскировка'] }, ' — раскрыть фальшивую характеристику.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['⚡ Саботаж'] }, ' — аннулировать характеристику соперника на раунд.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['🔄 Обмен'] }, ' — поменяться нераскрытой картой с любым игроком.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['🤝 Союз'] }, ' — вы и партнёр не голосуете друг против друга.'] },
+      ]},
+      { tag: 'hr' },
+      { tag: 'h3', children: ['☣ Сценарии катастроф'] },
+      { tag: 'ul', children: [
+        { tag: 'li', children: [{ tag: 'b', children: ['☢ Ядерная война'] }, ' — 12 лет изоляции. Медики и аграрии в приоритете.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['☣ Пандемия'] }, ' — биологи и фармацевты спасают всех.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['🌊 Потоп'] }, ' — горный бункер. Строители и рыбаки нужны.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['🌑 Метеорит'] }, ' — ядерная зима. Гидропоника и инженеры.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['🧟 Зомби'] }, ' — военные, снайперы, психологи.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['🌪 Климатический коллапс'] }, ' — агрономы и ботаники решают всё.'] },
+      ]},
+      { tag: 'hr' },
+      { tag: 'h3', children: ['💡 Советы выжившим'] },
+      { tag: 'ul', children: [
+        { tag: 'li', children: [{ tag: 'b', children: ['Не раскрывай всё сразу.'] }, ' Лучшие карты держи в запасе — покажи когда тебя хотят выгнать.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['Создавай союзы.'] }, ' Найди игрока с дополняющими навыками и договорись голосовать вместе.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['Атакуй молчунов.'] }, ' Тот, кто прячет карты — самая лёгкая цель.'] },
+        { tag: 'li', children: [{ tag: 'b', children: ['Спецкарту — в финал.'] }, ' Иммунитет бесполезен в раунде 1. Придержи до критического момента.'] },
+      ]},
+      { tag: 'hr' },
+      { tag: 'p', children: [{ tag: 'b', children: ['Удачи. Бункер ждёт. ☢'] }] },
+    ];
+
+    const page = await telegraphRequest('createPage', {
+      access_token: token,
+      title: '☢ БУНКЕР — Правила игры',
+      author_name: 'БУНКЕР — игра выживания',
+      author_url: WEBAPP_URL,
+      content: JSON.stringify(content),
+    });
+
+    if (!page.ok) throw new Error(page.error);
+    telegraphUrl = page.result.url;
+    console.log('✅ Telegraph страница создана:', telegraphUrl);
+    console.log('💡 Добавь в Railway: TELEGRAPH_URL=' + telegraphUrl);
+  } catch (e) {
+    console.error('⚠️ Telegraph не создан, используем fallback:', e.message);
+    telegraphUrl = `${WEBAPP_URL}/rules.html`;
+  }
+}
+
+// ═══════════════════════════════════════════════
 //   START SERVER
 // ═══════════════════════════════════════════════
 server.listen(PORT, async () => {
   console.log(`\n☢ БУНКЕР сервер запущен на порту ${PORT}`);
   console.log(`📱 Webapp: ${WEBAPP_URL}`);
-  console.log(`🤖 Bot: @${(await bot.telegram.getMe()).username}\n`);
+
+  // Создаём Telegraph страницу автоматически
+  await createTelegraphPage();
+
+  console.log(`🤖 Bot: @${(await bot.telegram.getMe().catch(() => ({ username: '?' }))).username}\n`);
 
   // Set webhook
   try {
-    await bot.telegram.setWebhook(`${WEBAPP_URL}${WEBHOOK_PATH}`);
-    console.log('✅ Webhook установлен:', `${WEBAPP_URL}${WEBHOOK_PATH}`);
+    await bot.telegram.setWebhook(`${WEBAPP_URL}${WEBHOOK_PATH}`, {
+      allowed_updates: ['message', 'callback_query', 'inline_query'],
+    });
+    console.log('✅ Webhook установлен');
+
+    const cmds = [
+      { command: 'bunker',  description: '☢ Создать игру / Create game' },
+      { command: 'newgame', description: '▶ Новая игра' },
+      { command: 'game',    description: '🎮 Открыть игру' },
+      { command: 'join',    description: '→ Войти по коду: /join XXXX' },
+      { command: 'rooms',   description: '📋 Активные комнаты' },
+    ];
+    await bot.telegram.setMyCommands(cmds);
+    await bot.telegram.setMyCommands(cmds, { scope: { type: 'all_group_chats' } });
+    await bot.telegram.setMyCommands(cmds, { scope: { type: 'all_private_chats' } });
+    console.log('✅ Команды установлены для групп и личных чатов');
   } catch (e) {
     console.error('❌ Webhook error:', e.message);
-    // Fallback to polling for local dev
-    bot.launch();
+    bot.launch({ allowedUpdates: ['message', 'callback_query'] });
     console.log('🔄 Запущен polling (локальный режим)');
   }
 });
