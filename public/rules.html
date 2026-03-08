@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>☢ БУНКЕР — Правила</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+body { background:#050403; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+
+.wrap { width:390px; background:var(--bg); border-radius:20px; overflow:hidden;
+  box-shadow:0 0 0 2px #222,0 0 0 8px #111,0 30px 80px rgba(0,0,0,0.85); }
+
+.rules-hero { text-align:center; padding:36px 24px 20px; border-bottom:1px solid var(--border); }
+
+.rule-block {
+  padding:14px 18px;
+  border-bottom:1px solid var(--border);
+  animation: fadeUp 0.4s ease both;
+}
+.rule-num {
+  font-family:'Oswald',sans-serif; font-size:11px; font-weight:700;
+  color:var(--red-light); letter-spacing:3px; text-transform:uppercase;
+  margin-bottom:5px;
+}
+.rule-title {
+  font-family:'Oswald',sans-serif; font-size:17px; font-weight:600;
+  color:var(--gold-light); letter-spacing:2px; margin-bottom:6px;
+}
+.rule-body {
+  font-family:'Special Elite',cursive; font-size:12px;
+  color:var(--text); line-height:1.8;
+}
+
+.cards-showcase {
+  display:grid; grid-template-columns:1fr 1fr; gap:6px;
+  padding:0 18px 14px;
+}
+.card-demo {
+  padding:10px 11px;
+  background:linear-gradient(135deg,rgba(200,146,58,0.09),rgba(200,100,40,0.04));
+  border:1px solid rgba(200,146,58,0.3); border-radius:5px;
+  animation:fadeUp 0.4s ease both;
+}
+.cd-icon { font-size:16px; margin-bottom:3px; }
+.cd-label { font-size:7px; letter-spacing:2px; color:var(--text-dim); text-transform:uppercase; margin-bottom:3px; }
+.cd-val { font-family:'Special Elite',cursive; font-size:11px; color:var(--gold-light); line-height:1.3; }
+
+.round-flow {
+  display:flex; flex-direction:column; gap:0;
+  padding:0 18px 14px;
+}
+.round-step {
+  display:flex; gap:12px; align-items:flex-start;
+  padding:10px 0; border-bottom:1px solid rgba(200,146,58,0.08);
+  animation:fadeUp 0.4s ease both;
+}
+.round-step:last-child { border-bottom:none; }
+.rs-num {
+  width:28px; height:28px; border-radius:50%;
+  border:1px solid var(--border-bright);
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Oswald',sans-serif; font-size:13px; font-weight:700;
+  color:var(--gold); flex-shrink:0; margin-top:2px;
+}
+.rs-title { font-size:11px; color:var(--gold-light); font-weight:bold; margin-bottom:3px; }
+.rs-desc { font-size:10px; color:var(--text-dim); line-height:1.6; }
+
+.spec-showcase {
+  display:flex; flex-direction:column; gap:6px; padding:0 18px 14px;
+}
+.spec-demo {
+  display:flex; gap:10px; align-items:flex-start; padding:10px 12px;
+  background:rgba(192,56,40,0.07); border:1px solid rgba(192,56,40,0.22);
+  border-radius:5px; animation:fadeUp 0.4s ease both;
+}
+.sd-ico { font-size:18px; flex-shrink:0; }
+.sd-name { font-size:10px; color:var(--red-light); letter-spacing:1px; font-weight:bold; margin-bottom:2px; }
+.sd-desc { font-size:10px; color:var(--text-dim); line-height:1.5; }
+
+.disaster-list {
+  display:flex; flex-direction:column; gap:6px; padding:0 18px 14px;
+}
+.dis-item {
+  padding:9px 12px;
+  background:rgba(192,56,40,0.06); border:1px solid rgba(192,56,40,0.18);
+  border-radius:4px; animation:fadeUp 0.4s ease both;
+}
+.dis-name { font-family:'Oswald',sans-serif; font-size:13px; color:var(--red-light); letter-spacing:1px; margin-bottom:3px; }
+.dis-desc { font-size:10px; color:#c07050; line-height:1.5; }
+
+.tip-box {
+  margin:0 18px 8px; padding:11px 13px;
+  background:rgba(58,122,58,0.07); border:1px solid rgba(58,122,58,0.22);
+  border-radius:5px; display:flex; gap:10px; align-items:flex-start;
+  animation:fadeUp 0.4s ease both;
+}
+.tip-ico { font-size:18px; flex-shrink:0; }
+.tip-text { font-size:11px; color:var(--text); line-height:1.6; font-family:'Special Elite',cursive; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HERO -->
+  <div class="rules-hero">
+    <div style="font-size:50px;display:inline-block;animation:spin 12s linear infinite;filter:drop-shadow(0 0 18px rgba(200,146,58,0.4));margin-bottom:10px;">☢</div>
+    <div style="font-family:'Oswald',sans-serif;font-size:38px;font-weight:700;color:var(--gold-light);letter-spacing:5px;text-shadow:0 0 30px rgba(232,184,74,0.4);margin-bottom:4px;">БУНКЕР</div>
+    <div style="font-size:8px;letter-spacing:4px;color:var(--text-dim);text-transform:uppercase;">Правила игры</div>
+  </div>
+
+  <!-- СУТЬ -->
+  <div class="rule-block" style="animation-delay:0.05s;">
+    <div class="rule-num">▸ О ЧЁМ ИГРА</div>
+    <div class="rule-title">Выживи любой ценой</div>
+    <div class="rule-body">
+      Мир погибает. Есть бункер — но мест мало. Каждый игрок получает уникального персонажа с набором характеристик. Твоя цель — убедить остальных, что именно ты заслуживаешь место в бункере.
+    </div>
+  </div>
+
+  <!-- ИГРОКИ -->
+  <div class="rule-block" style="animation-delay:0.08s;">
+    <div class="rule-num">▸ УЧАСТНИКИ</div>
+    <div class="rule-title">4–8 игроков</div>
+    <div class="rule-body">
+      Хост создаёт комнату и задаёт параметры: сколько мест в бункере, сколько раундов, время на дебаты. Остальные входят по 4-значному коду.
+    </div>
+  </div>
+
+  <!-- КАРТОЧКИ -->
+  <div class="rule-block" style="animation-delay:0.1s;">
+    <div class="rule-num">▸ КАРТОЧКИ ПЕРСОНАЖА</div>
+    <div class="rule-title">7 характеристик</div>
+    <div class="rule-body" style="margin-bottom:10px;">
+      Каждый игрок получает случайный набор. Карты скрыты — раскрываются по одной за раунд:
+    </div>
+  </div>
+  <div class="cards-showcase">
+    ${[
+      ['👤','Раунд 1','Профессия','Хирург-травматолог'],
+      ['🎂','Раунд 2','Возраст','38 лет'],
+      ['❤️','Раунд 3','Здоровье','Абсолютно здоров'],
+      ['🎯','Раунд 4','Хобби','Огородничество'],
+      ['🔧','Раунд 5','Навык','Чинит генераторы'],
+      ['🧬','Раунд 6','Биоданные','Двое детей'],
+    ].map(([ico,rnd,lbl,val],i)=>`
+      <div class="card-demo" style="animation-delay:${0.12+i*0.04}s;">
+        <div class="cd-icon">${ico}</div>
+        <div class="cd-label">${rnd} · ${lbl}</div>
+        <div class="cd-val">${val}</div>
+      </div>
+    `).join('')}
+  </div>
+
+  <!-- ХОД ИГРЫ -->
+  <div class="rule-block" style="animation-delay:0.35s;">
+    <div class="rule-num">▸ КАК ИДЁТ ИГРА</div>
+    <div class="rule-title">Раунды → Голосование</div>
+  </div>
+  <div class="round-flow">
+    <div class="round-step" style="animation-delay:0.38s;">
+      <div class="rs-num">1</div>
+      <div>
+        <div class="rs-title">Раунд начинается</div>
+        <div class="rs-desc">Все видят новую карту — одну на всех. Например, в раунде 1 все раскрывают Профессию.</div>
+      </div>
+    </div>
+    <div class="round-step" style="animation-delay:0.41s;">
+      <div class="rs-num">2</div>
+      <div>
+        <div class="rs-title">⏱ Таймер дебатов</div>
+        <div class="rs-desc">Пока таймер идёт — обсуждайте в голосовом. Убеждайте, задавайте вопросы, блефуйте. Голосование заблокировано.</div>
+      </div>
+    </div>
+    <div class="round-step" style="animation-delay:0.44s;">
+      <div class="rs-num">3</div>
+      <div>
+        <div class="rs-title">🗳 Тайное голосование</div>
+        <div class="rs-desc">После таймера — все голосуют в приложении. Кто наберёт больше всего голосов — выбывает из игры.</div>
+      </div>
+    </div>
+    <div class="round-step" style="animation-delay:0.47s;">
+      <div class="rs-num">4</div>
+      <div>
+        <div class="rs-title">☠ Исключение</div>
+        <div class="rs-desc">Выбывший уходит. Его полная карточка раскрывается всем. Переходим к следующему раунду.</div>
+      </div>
+    </div>
+    <div class="round-step" style="animation-delay:0.5s;">
+      <div class="rs-num">🏆</div>
+      <div>
+        <div class="rs-title">Финал</div>
+        <div class="rs-desc">Когда остаётся столько игроков, сколько мест в бункере — они побеждают. Игра показывает эпилог.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- СПЕЦКАРТЫ -->
+  <div class="rule-block" style="animation-delay:0.52s;">
+    <div class="rule-num">▸ СПЕЦКАРТЫ</div>
+    <div class="rule-title">Используется 1 раз за игру</div>
+    <div class="rule-body" style="margin-bottom:10px;">У каждого игрока есть одна спецкарта — применяй в нужный момент:</div>
+  </div>
+  <div class="spec-showcase">
+    ${[
+      ['🛡','Иммунитет','Нельзя исключить в этом раунде голосования.'],
+      ['🔍','Разведка','Узнать одну скрытую характеристику любого игрока.'],
+      ['🗣','Двойной голос','Твой голос считается за два в этом раунде.'],
+      ['📣','Обвинение','Принудительно раскрыть скрытую карту любого игрока.'],
+      ['🎭','Маскировка','Раскрыть фальшивую характеристику вместо настоящей.'],
+      ['⚡','Саботаж','Аннулировать характеристику одного игрока на раунд.'],
+    ].map(([ico,name,desc],i)=>`
+      <div class="spec-demo" style="animation-delay:${0.54+i*0.04}s;">
+        <div class="sd-ico">${ico}</div>
+        <div>
+          <div class="sd-name">${name}</div>
+          <div class="sd-desc">${desc}</div>
+        </div>
+      </div>
+    `).join('')}
+  </div>
+
+  <!-- КАТАСТРОФЫ -->
+  <div class="rule-block" style="animation-delay:0.76s;">
+    <div class="rule-num">▸ СЦЕНАРИИ КАТАСТРОФ</div>
+    <div class="rule-title">Каждая игра уникальна</div>
+    <div class="rule-body" style="margin-bottom:10px;">Случайный сценарий определяет, что важно для выживания:</div>
+  </div>
+  <div class="disaster-list">
+    ${[
+      ['☢ Ядерная война','Радиация, изоляция 12 лет. Нужны медики и аграрии.'],
+      ['☣ Пандемия вируса','Смертельный вирус. Важны биологи и иммунитет.'],
+      ['🌊 Глобальный потоп','Горный бункер. Нужны строители и рыбаки.'],
+      ['🌑 Удар метеорита','Ядерная зима. Гидропоника и инженеры решают всё.'],
+      ['🧟 Зомби-апокалипсис','Форт под осадой. Военные и снайперы в приоритете.'],
+      ['🌪 Климатический коллапс','20 лет без еды. Агрономы и ботаники — боги.'],
+    ].map(([name,desc],i)=>`
+      <div class="dis-item" style="animation-delay:${0.78+i*0.04}s;">
+        <div class="dis-name">${name}</div>
+        <div class="dis-desc">${desc}</div>
+      </div>
+    `).join('')}
+  </div>
+
+  <!-- СОВЕТЫ -->
+  <div class="rule-block" style="animation-delay:0.98s;">
+    <div class="rule-num">▸ СОВЕТЫ ВЫЖИВШИМ</div>
+    <div class="rule-title">Стратегия побеждает</div>
+  </div>
+  <div class="tip-box" style="animation-delay:1s;">
+    <div class="tip-ico">🎭</div>
+    <div class="tip-text">Не раскрывай всё сразу. Держи хорошие карты в запасе — раскрой их когда тебя хотят выгнать.</div>
+  </div>
+  <div class="tip-box" style="animation-delay:1.03s;">
+    <div class="tip-ico">🤝</div>
+    <div class="tip-text">Создавай союзы. Найди игрока с дополняющими навыками и договорись голосовать вместе.</div>
+  </div>
+  <div class="tip-box" style="animation-delay:1.06s;">
+    <div class="tip-ico">🔍</div>
+    <div class="tip-text">Атакуй слабых. Тот, кто молчит и прячет карты — подозрителен. Давите на них вопросами.</div>
+  </div>
+  <div class="tip-box" style="animation-delay:1.09s;">
+    <div class="tip-ico">🛡</div>
+    <div class="tip-text">Спецкарту — в нужный момент. Иммунитет бесполезен в первом раунде. Придержи его до финала.</div>
+  </div>
+
+  <!-- КНОПКИ -->
+  <div style="padding:16px 18px 28px;display:flex;flex-direction:column;gap:8px;">
+    <button class="btn-primary" onclick="goPlay()" style="animation:glowbtn 2s infinite;margin:0;">▶ ИГРАТЬ</button>
+    <button class="btn-ghost" onclick="history.back()" style="margin:0;">← НАЗАД</button>
+  </div>
+
+</div>
+
+<script>
+function goPlay() {
+  const tg = window.Telegram?.WebApp;
+  if (tg?.close) { tg.close(); return; }
+  window.location.href = 'index.html';
+}
+
+// Telegram back button
+const tg = window.Telegram?.WebApp;
+if (tg) {
+  tg.BackButton.show();
+  tg.BackButton.onClick(() => history.back());
+}
+</script>
+</body>
+</html>
