@@ -1,1 +1,264 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>☢ БУНКЕР — Создать игру</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+body { background:#050403; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+.wrap { width:390px; }
 
+.hero { text-align:center; padding:40px 24px 28px; }
+
+.mode-tabs { display:flex; gap:4px; margin:0 18px 16px; }
+.mode-tab {
+  flex:1; padding:10px;
+  font-size:9px; letter-spacing:2px; text-transform:uppercase;
+  font-family:'Share Tech Mono',monospace;
+  border:1px solid var(--border); background:transparent;
+  color:var(--text-dim); border-radius:4px; cursor:pointer; transition:all 0.2s;
+}
+.mode-tab.active {
+  background:rgba(200,146,58,0.1); border-color:var(--border-bright);
+  color:var(--gold-light);
+}
+
+.panel { display:none; }
+.panel.active { display:block; }
+
+.settings-grid { display:flex; flex-direction:column; gap:8px; padding:0 18px 12px; }
+
+.disaster-preview {
+  margin:0 18px 12px;
+  padding:10px 13px;
+  background:rgba(192,56,40,0.07); border:1px solid var(--red-border);
+  border-radius:5px; font-size:10px; color:#c07050; line-height:1.6;
+}
+.disaster-name { font-family:'Oswald',sans-serif; font-size:14px; color:var(--red-light); letter-spacing:2px; margin-bottom:4px; }
+
+.join-code-inp {
+  width:100%; padding:16px; text-align:center;
+  background:rgba(255,255,255,0.03); border:1px solid var(--border);
+  border-radius:4px; color:var(--gold-light);
+  font-family:'Oswald',sans-serif; font-size:30px; letter-spacing:8px;
+  text-transform:uppercase; outline:none; transition:all 0.2s;
+}
+.join-code-inp:focus { border-color:var(--border-bright); }
+
+.spacer { height:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="background:var(--bg);border-radius:20px;overflow:hidden;box-shadow:0 0 0 2px #222,0 0 0 8px #111,0 30px 80px rgba(0,0,0,0.85);">
+
+    <!-- Hero -->
+    <div class="hero">
+      <div style="font-size:56px;display:inline-block;animation:spin 12s linear infinite;filter:drop-shadow(0 0 20px rgba(200,146,58,0.4));margin-bottom:10px;">☢</div>
+      <div style="font-family:'Oswald',sans-serif;font-size:46px;font-weight:700;color:var(--gold-light);letter-spacing:6px;text-shadow:0 0 40px rgba(232,184,74,0.42);margin-bottom:4px;">БУНКЕР</div>
+      <div style="font-size:9px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase;">Протокол выживания · v2.1</div>
+    </div>
+
+    <!-- Mode tabs -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" id="tabCreate" onclick="setMode('create')">✚ Создать комнату</button>
+      <button class="mode-tab" id="tabJoin" onclick="setMode('join')">→ Войти по коду</button>
+    </div>
+
+    <!-- ═══ CREATE PANEL ═══ -->
+    <div class="panel active" id="panelCreate">
+
+      <div class="s-hdr">▸ Ваш персонаж</div>
+      <div class="input-group">
+        <div class="input-label">Ваше имя</div>
+        <input class="inp" id="myName" maxlength="12" placeholder="ВВЕДИТЕ ИМЯ" oninput="this.value=this.value.toUpperCase()">
+      </div>
+      <div class="s-hdr" style="padding-top:0;">▸ Ваш аватар</div>
+      <div class="emoji-row" id="emojiRow"></div>
+
+      <div class="sep"></div>
+
+      <div class="s-hdr">▸ Настройки комнаты</div>
+      <div class="input-group">
+        <div class="input-label">Название комнаты (необязательно)</div>
+        <input class="inp" id="roomName" maxlength="20" placeholder="МОЙ БУНКЕР" oninput="this.value=this.value.toUpperCase()">
+      </div>
+
+      <div class="settings-grid">
+
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Максимум игроков</div>
+            <div class="setting-sub">Всего мест в лобби</div>
+          </div>
+          <div class="stepper">
+            <button class="step-btn" onclick="adj('maxPlayers',-1)">−</button>
+            <span class="step-val" id="maxPlayersVal">6</span>
+            <button class="step-btn plus" onclick="adj('maxPlayers',1)">+</button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Мест в бункере</div>
+            <div class="setting-sub">Кол-во выживших в финале</div>
+          </div>
+          <div class="stepper">
+            <button class="step-btn" onclick="adj('bunkerSize',-1)">−</button>
+            <span class="step-val" id="bunkerSizeVal">3</span>
+            <button class="step-btn plus" onclick="adj('bunkerSize',1)">+</button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Раундов дебатов</div>
+            <div class="setting-sub">Карт раскрывается за игру</div>
+          </div>
+          <div class="stepper">
+            <button class="step-btn" onclick="adj('totalRounds',-1)">−</button>
+            <span class="step-val" id="totalRoundsVal">4</span>
+            <button class="step-btn plus" onclick="adj('totalRounds',1)">+</button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Время дебатов</div>
+            <div class="setting-sub">Секунд на каждый раунд</div>
+          </div>
+          <div class="stepper">
+            <button class="step-btn" onclick="adj('debateSeconds',-15)">−</button>
+            <span class="step-val" id="debateSecondsVal" style="min-width:42px;font-size:16px;">90с</span>
+            <button class="step-btn plus" onclick="adj('debateSeconds',15)">+</button>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="s-hdr">▸ Катастрофа</div>
+      <div class="disaster-preview" id="disasterPreview">
+        <div class="disaster-name" id="disasterName">—</div>
+        <div id="disasterDesc">—</div>
+      </div>
+      <button class="btn-ghost" onclick="randomDisaster()" style="margin-bottom:10px;">🎲 Другая катастрофа</button>
+
+      <div class="spacer"></div>
+      <button class="btn-primary" onclick="createRoom()" style="animation:glowbtn 2s infinite;">▶ СОЗДАТЬ КОМНАТУ</button>
+      <div class="spacer"></div>
+    </div>
+
+    <!-- ═══ JOIN PANEL ═══ -->
+    <div class="panel" id="panelJoin">
+      <div class="s-hdr">▸ Ваш персонаж</div>
+      <div class="input-group">
+        <div class="input-label">Ваше имя</div>
+        <input class="inp" id="joinName" maxlength="12" placeholder="ВВЕДИТЕ ИМЯ" oninput="this.value=this.value.toUpperCase()">
+      </div>
+      <div class="s-hdr" style="padding-top:0;">▸ Ваш аватар</div>
+      <div class="emoji-row" id="emojiRowJoin"></div>
+
+      <div class="sep"></div>
+
+      <div class="s-hdr">▸ Код комнаты</div>
+      <div class="input-group">
+        <input class="join-code-inp" id="joinCode" maxlength="4" placeholder="XXXX" oninput="this.value=this.value.toUpperCase()">
+      </div>
+      <div class="hint">Введите 4-значный код от организатора</div>
+
+      <div class="spacer"></div>
+      <button class="btn-primary" onclick="joinRoom()">→ ВОЙТИ В КОМНАТУ</button>
+      <div class="spacer"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/engine.js"></script>
+<script>
+const EMOJIS = ["🧔","👩","🧑","👧","👴","👩‍🦰","👱‍♀️","🧓","👨‍🦱","👩‍🦳","🧕","👨‍🔬","👩‍🔬","🧑‍🚒","👨‍⚕️"];
+let selectedEmoji = EMOJIS[0];
+let selectedDisasterIdx = 0;
+let settings = { maxPlayers:6, bunkerSize:3, totalRounds:4, debateSeconds:90 };
+const limits = {
+  maxPlayers:{min:4,max:8}, bunkerSize:{min:1,max:5},
+  totalRounds:{min:2,max:7}, debateSeconds:{min:30,max:180,step:15},
+};
+
+function renderEmojiRows() {
+  ['emojiRow','emojiRowJoin'].forEach(id => {
+    document.getElementById(id).innerHTML = EMOJIS.map(e =>
+      `<div class="emoji-opt ${e===selectedEmoji?'selected':''}" onclick="pickEmoji('${e}',this)">${e}</div>`
+    ).join('');
+  });
+}
+
+function pickEmoji(e, el) {
+  selectedEmoji = e;
+  document.querySelectorAll('.emoji-opt').forEach(x => x.classList.remove('selected'));
+  document.querySelectorAll('.emoji-opt').forEach(x => { if(x.textContent===e) x.classList.add('selected'); });
+}
+
+function adj(key, delta) {
+  const lim = limits[key];
+  if (key === 'debateSeconds') {
+    settings[key] = Math.max(lim.min, Math.min(lim.max, settings[key] + delta));
+    document.getElementById('debateSecondsVal').textContent = settings[key] + 'с';
+  } else {
+    settings[key] = Math.max(lim.min, Math.min(lim.max, settings[key] + delta));
+    if (key === 'maxPlayers' && settings.bunkerSize >= settings.maxPlayers) {
+      settings.bunkerSize = settings.maxPlayers - 1;
+      document.getElementById('bunkerSizeVal').textContent = settings.bunkerSize;
+    }
+    if (key === 'bunkerSize' && settings.bunkerSize >= settings.maxPlayers) {
+      settings.bunkerSize = settings.maxPlayers - 1;
+    }
+    document.getElementById(key + 'Val').textContent = settings[key];
+  }
+}
+
+function randomDisaster() {
+  selectedDisasterIdx = Math.floor(Math.random() * DATA.DISASTERS.length);
+  const d = DATA.DISASTERS[selectedDisasterIdx];
+  document.getElementById('disasterName').textContent = d.name;
+  document.getElementById('disasterDesc').textContent = d.desc;
+}
+
+function setMode(m) {
+  document.getElementById('tabCreate').classList.toggle('active', m==='create');
+  document.getElementById('tabJoin').classList.toggle('active', m==='join');
+  document.getElementById('panelCreate').classList.toggle('active', m==='create');
+  document.getElementById('panelJoin').classList.toggle('active', m==='join');
+}
+
+function createRoom() {
+  const name = document.getElementById('myName').value.trim();
+  if (!name) { alert('Введите ваше имя!'); return; }
+  const s = { ...settings, roomName: document.getElementById('roomName').value.trim() };
+  let state = ENGINE.createRoom(s, name, selectedEmoji);
+  // Force chosen disaster
+  state.disaster = DATA.DISASTERS[selectedDisasterIdx];
+  ENGINE.save(state);
+  window.location.href = 'game.html';
+}
+
+function joinRoom() {
+  const code = document.getElementById('joinCode').value.trim();
+  const name = document.getElementById('joinName').value.trim();
+  if (!code || code.length < 4) { alert('Введите код комнаты!'); return; }
+  if (!name) { alert('Введите ваше имя!'); return; }
+  // In demo: create a fresh game as if joining
+  const state = ENGINE.createRoom({ maxPlayers:6, bunkerSize:3, totalRounds:4, debateSeconds:90 }, name, selectedEmoji);
+  state.roomCode = code.toUpperCase();
+  ENGINE.save(state);
+  window.location.href = 'game.html';
+}
+
+// Init
+randomDisaster();
+renderEmojiRows();
+</script>
+</body>
+</html>
