@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>☢ БУНКЕР</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+<div class="phone">
+  <div class="statusbar">
+    <span class="sb-time" id="clockEl">9:41</span>
+    <div class="sb-icons"><span>📶</span><span>🔋</span></div>
+  </div>
+
+  <div class="screen">
+    <div class="screen-inner" id="screenInner">
+      <!-- Loading -->
+      <div style="text-align:center;padding:80px 24px;">
+        <div style="font-size:52px;animation:spin 2s linear infinite;display:inline-block;margin-bottom:16px;">☢</div>
+        <div style="font-family:'Oswald',sans-serif;font-size:18px;color:var(--gold);letter-spacing:3px;">ЗАГРУЗКА…</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-nav" id="bottomNav" style="display:none;">
+    <div class="nav-item" id="nav-cards"   onclick="goTab('cards')">
+      <span class="nav-icon">🃏</span><span class="nav-lbl">Карты</span>
+    </div>
+    <div class="nav-item" id="nav-players" onclick="goTab('players')">
+      <span class="nav-icon">👥</span><span class="nav-lbl">Игроки</span>
+    </div>
+    <div class="nav-item" id="nav-vote"    onclick="goTab('vote')">
+      <span class="nav-icon">🗳</span><span class="nav-lbl">Голос</span>
+      <div class="nav-dot"></div>
+    </div>
+    <div class="nav-item" id="nav-log"     onclick="goTab('log')">
+      <span class="nav-icon">📋</span><span class="nav-lbl">Журнал</span>
+    </div>
+  </div>
+
+  <div id="toastEl" style="display:none;position:absolute;top:52px;left:50%;transform:translateX(-50%);background:rgba(18,14,8,0.97);border:1px solid var(--border-bright);padding:9px 18px;border-radius:6px;z-index:2000;font-size:11px;color:var(--gold-light);letter-spacing:1px;white-space:nowrap;pointer-events:none;"></div>
+
+  <div id="overlayEl" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.88);z-index:800;align-items:center;justify-content:center;">
+    <div style="width:330px;background:var(--bg2);border:1px solid var(--border-bright);border-radius:10px;padding:26px;text-align:center;">
+      <div id="ovIcon"  style="font-size:46px;margin-bottom:10px;"></div>
+      <div id="ovTitle" style="font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:var(--gold-light);letter-spacing:3px;margin-bottom:8px;"></div>
+      <div id="ovBody"  style="font-family:'Special Elite',cursive;font-size:13px;color:var(--text);line-height:1.75;margin-bottom:18px;"></div>
+      <button onclick="closeOverlay()" style="width:100%;padding:12px;background:rgba(200,146,58,0.14);border:1px solid var(--border-bright);color:var(--gold);font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;border-radius:4px;cursor:pointer;">✓ ПОНЯТНО</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script>
+// ══════════════════════════════════════
+//   CONFIG
+// ══════════════════════════════════════
+const SERVER_URL = window.location.origin;
+const WS_URL     = SERVER_URL.replace('https','wss').replace('http','ws');
+
+// ── Parse URL params ──
+const params     = new URLSearchParams(window.location.search);
+const ROOM_CODE  = params.get('room')?.toUpperCase();
+const PLAYER_ID  = parseInt(params.get('pid') || localStorage.getItem('bunker_pid') || '0');
+
+// ── State ──
+let G            = null;   // full room state from server
+let ws           = null;
+let currentTab   = 'cards';
+let selectedVote = null;
+let timerInterval= null;
+
+// ══════════════════════════════════════
+//   WEBSOCKET
+// ══════════════════════════════════════
+function connectWS() {
+  ws = new WebSocket(`${WS_URL}`);
+
+  ws.onopen = () => {
+    console.log('🔌 WS open');
+    ws.send(JSON.stringify({ type: 'JOIN_ROOM', roomCode: ROOM_CODE, playerId: PLAYER_ID }));
+  };
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    handleMessage(msg);
+  };
+
+  ws.onerror  = () => showToast('⚠️ Ошибка соединения');
+  ws.onclose  = () => {
+    showToast('🔄 Переподключение…');
+    setTimeout(connectWS, 2500);
+  };
+}
+
+function send(obj) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+}
+
+// ══════════════════════════════════════
+//   MESSAGE HANDLER
+// ══════════════════════════════════════
+function handleMessage(msg) {
+  switch (msg.type) {
+    case 'STATE':
+      G = msg.state;
+      renderPhase();
+      break;
+    case 'TICK':
+      if (G) { G.timeLeft = msg.timeLeft; updateTimerDisplays(); }
+      break;
+    case 'VOTE_CAST':
+      showToast(`🗳 Проголосовало ${msg.castCount} из ${msg.totalVoters}`);
+      if (G) { G.castCount = msg.castCount; }
+      break;
+    case 'PLAYER_JOINED':
+      showToast(`👤 ${msg.player.name} вошёл в комнату`);
+      break;
+    case 'PLAYER_ONLINE':
+      showToast(`🟢 Игрок онлайн`);
+      break;
+    case 'PLAYER_OFFLINE':
+      showToast(`🔴 Игрок отключился`);
+      break;
+    case 'ERROR':
+      showToast(`❌ ${msg.text}`);
+      break;
+  }
+}
+
+// ══════════════════════════════════════
+//   PHASE ROUTER
+// ══════════════════════════════════════
+function renderPhase() {
+  if (!G) return;
+  const nav = document.getElementById('bottomNav');
+
+  if (G.phase === 'lobby') {
+    nav.style.display = 'none';
+    renderLobby();
+  } else if (G.phase === 'debate') {
+    nav.style.display = 'flex';
+    document.getElementById('nav-vote').classList.remove('has-alert');
+    if (currentTab === 'vote') currentTab = 'cards';
+    goTab(currentTab);
+  } else if (G.phase === 'voting') {
+    nav.style.display = 'flex';
+    document.getElementById('nav-vote').classList.add('has-alert');
+    goTab('vote');
+  } else if (G.phase === 'result') {
+    nav.style.display = 'none';
+    renderResult();
+  } else if (G.phase === 'gameover') {
+    nav.style.display = 'none';
+    renderGameover();
+  }
+}
+
+// ══════════════════════════════════════
+//   TIMER DISPLAY
+// ══════════════════════════════════════
+function updateTimerDisplays() {
+  if (!G) return;
+  const m = Math.floor(G.timeLeft/60), s = String(G.timeLeft%60).padStart(2,'0');
+  document.querySelectorAll('.timer-val-live').forEach(el => {
+    el.textContent = `${m}:${s}`;
+    el.className = 'timer-val timer-val-live' + (G.timeLeft < 20 ? ' danger' : '');
+  });
+}
+
+// ══════════════════════════════════════
+//   TABS
+// ══════════════════════════════════════
+function goTab(tab) {
+  if (tab === 'vote' && G?.phase === 'debate') {
+    showToast('⏰ Голосование откроется после таймера');
+    return;
+  }
+  currentTab = tab;
+  ['cards','players','vote','log'].forEach(t => {
+    document.getElementById('nav-'+t)?.classList.toggle('active', t===tab);
+  });
+  if (tab === 'cards')   renderMyCards();
+  if (tab === 'players') renderPlayers();
+  if (tab === 'vote')    renderVoting();
+  if (tab === 'log')     renderLog();
+}
+
+// ══════════════════════════════════════
+//   TOPBAR
+// ══════════════════════════════════════
+function topBar(voteMode) {
+  if (!G) return '';
+  const m = Math.floor(G.timeLeft/60), s = String(G.timeLeft%60).padStart(2,'0');
+  const isVoting = G.phase === 'voting';
+  const cardType = DATA.CARD_TYPES[G.round-1];
+
+  return `
+    <div class="topbar">
+      <div class="topbar-row">
+        <div>
+          <div class="game-label">Протокол выживания</div>
+          <div class="game-title">☢ БУНКЕР</div>
+        </div>
+        <div class="timer-wrap">
+          <div class="timer-lbl">Раунд <span class="round-lbl-live">${G.round}</span> / ${G.settings.totalRounds}</div>
+          <div class="timer-val timer-val-live ${isVoting?'vote-mode': G.timeLeft<20?'danger':''}">
+            ${isVoting ? '🗳' : `${m}:${s}`}
+          </div>
+        </div>
+      </div>
+      <div class="scenario-strip">☣ <span><b>${G.disaster?.short||''}</b> · ${G.disaster?.bunkerDesc||''}</span></div>
+      <div style="margin-bottom:8px;">
+        <span class="phase-badge ${isVoting?'voting':'debate'}">
+          ${isVoting ? '🗳 ГОЛОСОВАНИЕ' : `💬 ДЕБАТЫ · ${cardType?.icon||''} ${cardType?.label||''}`}
+        </span>
+      </div>
+      <div class="tabs">
+        ${['cards','players','vote'].map((t,i) => {
+          const locked = t==='vote' && G.phase==='debate';
+          return `<div class="tab ${currentTab===t?'active':''}" onclick="goTab('${t}')" style="${locked?'opacity:0.4;cursor:default;':''}">
+            ${['МОИ КАРТЫ','ИГРОКИ','ГОЛОСОВАТЬ'][i]}${locked?' 🔒':''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════
+//   LOBBY
+// ══════════════════════════════════════
+function renderLobby() {
+  const s = G.settings;
+  const isHost = G.players.find(p=>p.id===PLAYER_ID)?.isHost;
+
+  set(`
+    <div class="lobby-hero">
+      <div class="lobby-icon">☢</div>
+      <div class="lobby-title">БУНКЕР</div>
+      <div class="lobby-sub">Протокол выживания · v2.1</div>
+    </div>
+
+    <div class="code-box">
+      <div class="code-lbl">▸ Код комнаты — поделитесь с друзьями</div>
+      <div class="code-val">${G.code}</div>
+    </div>
+
+    <div class="s-hdr">▸ Игроки (${G.players.length} / ${s.maxPlayers})</div>
+    <div style="display:flex;flex-direction:column;gap:6px;padding:0 18px 12px;">
+      ${G.players.map((p,i) => `
+        <div class="lobby-player" style="animation-delay:${i*0.05}s;${p.id===PLAYER_ID?'border-color:var(--border-bright);background:rgba(200,146,58,0.05)':''}">
+          <span style="font-size:16px;">${p.emoji}</span>
+          <span class="lp-name">${p.name}</span>
+          ${p.id===PLAYER_ID?'<span class="badge badge-me">ВЫ</span>':''}
+          ${p.isHost?'<span class="badge badge-host">👑 ХОСТ</span>':''}
+          <span class="${p.online?'lp-ready':'lp-wait'}">${p.online?'✓ ОНЛАЙН':'⧖ ОФЛАЙН'}</span>
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="sep"></div>
+    <div class="s-hdr">▸ Параметры игры</div>
+    <div style="display:flex;flex-direction:column;gap:8px;padding:0 18px 14px;">
+      ${[
+        ['🏚 Мест в бункере', s.bunkerSize+' чел.'],
+        ['🔄 Раундов',        s.totalRounds],
+        ['⏱ Время раунда',   s.debateSeconds+'с'],
+      ].map(([l,v])=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:rgba(255,255,255,0.016);border:1px solid var(--border);border-radius:4px;">
+          <span style="font-size:10px;color:var(--text);">${l}</span>
+          <span style="font-family:'Oswald',sans-serif;font-size:16px;color:var(--gold);">${v}</span>
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="s-hdr">▸ Катастрофа</div>
+    <div style="margin:0 18px 14px;padding:12px 14px;background:rgba(192,56,40,0.07);border:1px solid var(--red-border);border-radius:6px;">
+      <div style="font-family:'Oswald',sans-serif;font-size:15px;color:var(--red-light);letter-spacing:2px;margin-bottom:4px;">${G.disaster?.name||''}</div>
+      <div style="font-size:11px;color:#c07050;line-height:1.6;">${G.disaster?.desc||''}</div>
+    </div>
+
+    ${isHost
+      ? `<button class="btn-primary" onclick="startGame()" style="animation:glowbtn 2s infinite;">▶ НАЧАТЬ ИГРУ</button>`
+      : `<div style="text-align:center;padding:16px;font-size:11px;color:var(--text-dim);letter-spacing:2px;">⧖ Ожидаем хоста…</div>`
+    }
+    <div style="height:20px;"></div>
+  `);
+}
+
+function startGame() {
+  send({ type: 'START_GAME', roomCode: ROOM_CODE });
+}
+
+// ══════════════════════════════════════
+//   MY CARDS
+// ══════════════════════════════════════
+function renderMyCards() {
+  const me = G.players.find(p=>p.id===PLAYER_ID);
+  if (!me) return;
+  const cardIdx = G.round - 1;
+
+  set(`
+    ${topBar()}
+    <div class="s-hdr">▸ Характеристики</div>
+    <div class="cards-grid">
+      ${me.cards.map((c,i) => {
+        const thisRound = i===cardIdx && c.revealed;
+        return `
+          <div class="char-card ${c.revealed?'revealed':'locked'} ${thisRound?'this-round':''}" style="animation-delay:${i*0.06}s;">
+            ${c.revealed ? `
+              <div class="card-cat">${c.label}</div>
+              <span class="card-ico">${c.icon}</span>
+              <div class="card-val">${c.value}</div>
+              ${thisRound?`<div class="card-round-badge">● РАУНД ${G.round}</div>`:`<div class="card-badge">✓</div>`}
+            ` : `
+              <div class="card-locked-inner">
+                <div class="card-lock-ico">🔒</div>
+                <div class="card-hint">${c.label}<br>Раунд ${i+1}</div>
+              </div>
+            `}
+          </div>
+        `;
+      }).join('')}
+    </div>
+
+    <div class="s-hdr" style="margin-top:8px;">▸ Спецкарта</div>
+    <div class="spec-card ${me.specCard?.used?'used':''}">
+      <div class="spec-ico">${me.specCard?.icon||'🃏'}</div>
+      <div>
+        <div class="spec-lbl">Спецкарта · ${me.specCard?.used?'ИСПОЛЬЗОВАНА':'1 использование'}</div>
+        <div class="spec-val">${me.specCard?.name}: ${me.specCard?.desc}</div>
+        ${!me.specCard?.used?`<button class="use-btn" onclick="useSpec()">▶ ПРИМЕНИТЬ</button>`:''}
+      </div>
+    </div>
+
+    <div class="s-hdr" style="margin-top:8px;">▸ Карты действия</div>
+    ${me.actionCards?.map((ac,i) => `
+      <div class="action-card ${me.actionUsed?.[i]?'used':''}" style="animation-delay:${i*0.08}s;">
+        <div class="ac-ico">${ac.icon}</div>
+        <div>
+          <div class="ac-lbl">Карта действия · ${me.actionUsed?.[i]?'ИСПОЛЬЗОВАНА':'1 раз'}</div>
+          <div class="ac-val">${ac.name}: ${ac.desc}</div>
+          ${!me.actionUsed?.[i]?`<button class="ac-btn" onclick="useAction(${i})">▶ ПРИМЕНИТЬ</button>`:''}
+        </div>
+      </div>
+    `).join('')||'<div class="hint">Нет карт действия</div>'}
+
+    <div class="s-hdr" style="margin-top:8px;">▸ Багаж</div>
+    <div class="bag-items">
+      ${me.baggage?.map(b=>`<div class="bag-item">🎒 ${b}</div>`).join('')||''}
+    </div>
+  `);
+}
+
+// ══════════════════════════════════════
+//   PLAYERS
+// ══════════════════════════════════════
+function renderPlayers() {
+  const alive = G.players.filter(p=>!p.eliminated);
+  const maxV = alive.length ? Math.max(...alive.map(p=>p.votes||0)) : 0;
+  const cardIdx = G.round - 1;
+
+  const rows = [...G.players]
+    .sort((a,b)=> a.eliminated&&!b.eliminated?1:!a.eliminated&&b.eliminated?-1:(b.votes||0)-(a.votes||0))
+    .map((p,i) => {
+      const topVoted = !p.eliminated && (p.votes||0)===maxV && maxV>0;
+      const revTags = p.cards?.filter(c=>c.revealed).map(c=>
+        `<span class="p-tag ${c.key===DATA.CARD_TYPES[cardIdx]?.key?'new-round':''}">${c.icon} ${c.value}</span>`
+      ).join('');
+      const hidN = p.cards?.filter(c=>!c.revealed).length||0;
+      return `
+        <div class="player-row ${p.id===PLAYER_ID?'is-me':''} ${topVoted?'top-voted':''} ${p.eliminated?'eliminated':''}" style="animation-delay:${i*0.05}s;">
+          <div class="p-avatar">${p.emoji}</div>
+          <div class="p-info">
+            <div class="p-name-row">
+              <span class="p-name">${p.name}</span>
+              ${p.id===PLAYER_ID?'<span class="badge badge-me">ВЫ</span>':''}
+              ${p.isHost?'<span class="badge badge-host">👑</span>':''}
+              ${p.eliminated?`<span class="badge badge-dead">✕ Р${p.eliminatedRound}</span>`:''}
+              ${!p.online&&!p.eliminated?'<span style="font-size:8px;color:var(--red);">ОФЛАЙН</span>':''}
+            </div>
+            <div class="p-tags">${revTags||''}${hidN?`<span class="p-tag ghost">🔒 +${hidN}</span>`:''}</div>
+          </div>
+          <div class="p-votes">
+            <div class="votes-num" style="${(p.votes||0)>=3?'color:var(--red-light)':''}">${p.votes||0}</div>
+            <div class="votes-lbl">голосов</div>
+          </div>
+          ${topVoted?'<div class="top-accent"></div>':''}
+        </div>
+      `;
+    }).join('');
+
+  set(`
+    ${topBar()}
+    <div class="s-hdr">▸ Игроки (${alive.length} выжило)</div>
+    ${rows}
+  `);
+}
+
+// ══════════════════════════════════════
+//   VOTING
+// ══════════════════════════════════════
+function renderVoting() {
+  const alive = G.players.filter(p=>!p.eliminated);
+  const myVoted = !!G.votes?.[PLAYER_ID];
+  const castV  = Object.keys(G.votes||{}).length;
+  const totalV = alive.length;
+
+  const voteItems = alive.map((p,i) => {
+    const isSelf = p.id===PLAYER_ID;
+    const sel = selectedVote===p.id;
+    const revealed = p.cards?.filter(c=>c.revealed).map(c=>c.value).join(' · ')||'—';
+    return `
+      <div class="vote-item ${sel?'selected':''} ${isSelf?'self-vote':''}"
+           onclick="${isSelf?'':'selectVote('+p.id+')'}"
+           style="animation-delay:${i*0.05}s;">
+        <div class="vote-radio ${sel?'checked':''}">${sel?'<div class="vote-dot"></div>':''}</div>
+        <span style="font-size:15px;">${p.emoji}</span>
+        <div>
+          <div class="vote-pname">${p.name}${isSelf?' (ВЫ)':''}</div>
+          <div class="vote-info">${revealed}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const dots = Array(totalV).fill(0).map((_,i)=>
+    `<div class="vp-dot ${i<castV?'filled':''}"></div>`
+  ).join('');
+
+  const target = G.players.find(p=>p.id===selectedVote);
+
+  set(`
+    ${topBar(true)}
+    <div style="text-align:center;padding:14px 18px 4px;">
+      <div style="font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:var(--red-light);letter-spacing:3px;margin-bottom:3px;">☠ ГОЛОСОВАНИЕ</div>
+      <div style="font-size:8px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;">Кто не войдёт в бункер?</div>
+    </div>
+    <div class="s-hdr" style="margin-top:4px;">▸ Выберите одного</div>
+
+    ${myVoted ? `
+      <div style="text-align:center;padding:20px 18px;">
+        <div style="font-size:32px;margin-bottom:10px;">✓</div>
+        <div style="font-family:'Oswald',sans-serif;font-size:16px;color:var(--green-light);letter-spacing:2px;margin-bottom:6px;">ГОЛОС ПРИНЯТ</div>
+        <div style="font-size:10px;color:var(--text-dim);">Ожидаем остальных…</div>
+      </div>
+    ` : voteItems}
+
+    <div class="vote-progress">
+      <span class="vp-lbl">Проголосовало ${castV} / ${totalV}</span>
+      <div class="vp-dots">${dots}</div>
+    </div>
+
+    ${!myVoted ? `
+      <button class="btn-danger" onclick="submitVote()" ${selectedVote?'':'disabled'}>
+        ☠ ${target?'ИСКЛЮЧИТЬ '+target.name:'ВЫБЕРИТЕ ИГРОКА'}
+      </button>
+      <div class="hint">Голос нельзя изменить</div>
+    ` : ''}
+  `);
+}
+
+function selectVote(id) {
+  selectedVote = id;
+  renderVoting();
+}
+
+function submitVote() {
+  if (!selectedVote || G.votes?.[PLAYER_ID]) return;
+  send({ type: 'CAST_VOTE', roomCode: ROOM_CODE, voterId: PLAYER_ID, targetId: selectedVote });
+  G.votes = G.votes || {};
+  G.votes[PLAYER_ID] = selectedVote;
+  renderVoting();
+}
+
+// ══════════════════════════════════════
+//   LOG
+// ══════════════════════════════════════
+function renderLog() {
+  set(`
+    <div style="padding:16px 18px 10px;">
+      <div style="font-family:'Oswald',sans-serif;font-size:20px;font-weight:600;color:var(--gold-light);letter-spacing:3px;">📋 ЖУРНАЛ</div>
+    </div>
+    ${(G.log||[]).map((e,i)=>`
+      <div class="log-entry ${e.type}" style="animation-delay:${i*0.04}s;">
+        <div class="log-ts">Раунд ${e.round||'—'} · ${e.ts}</div>
+        <b>${e.title}</b><br>${e.body}
+      </div>
+    `).join('')||'<div class="hint" style="margin-top:20px;">Журнал пуст</div>'}
+  `);
+}
+
+// ══════════════════════════════════════
+//   RESULT
+// ══════════════════════════════════════
+function renderResult() {
+  const elim = G.players.find(p=>p.id===G.voteResult?.eliminatedId);
+  const alive = G.players.filter(p=>!p.eliminated);
+  const isMe = elim?.id===PLAYER_ID;
+  const isGameover = alive.length<=G.settings.bunkerSize || G.round>=G.settings.totalRounds;
+  const isHost = G.players.find(p=>p.id===PLAYER_ID)?.isHost;
+
+  set(`
+    <div class="result-hero">
+      <div class="res-skull">${isMe?'😱':'💀'}</div>
+      <div class="res-title">${isMe?'ВЫ ИСКЛЮЧЕНЫ':'ИСКЛЮЧЁН ИЗ БУНКЕРА'}</div>
+      <div class="res-name">${elim?.emoji} ${elim?.name} · ${elim?.cards?.[0]?.value||'—'}</div>
+      <div class="res-sub">${G.voteResult?.voteCount} голосов · Раунд ${G.round}</div>
+    </div>
+    <div class="sep"></div>
+    <div class="s-hdr">▸ Полная карточка выбывшего</div>
+    <div class="res-cards-grid">
+      ${elim?.cards?.map(c=>`<div class="res-card">${c.icon} ${c.value}</div>`).join('')||''}
+    </div>
+    <div class="sep"></div>
+    <div class="s-hdr">▸ Оставшиеся (${alive.length})</div>
+    ${alive.map((p,i)=>`
+      <div class="surv-row" style="animation-delay:${i*0.08}s;">
+        <span style="font-size:16px;">${p.emoji}</span>
+        <span class="surv-name">${p.name}</span>
+        <span style="font-size:10px;">${p.cards?.[0]?.value||''}</span>
+        <span class="surv-badge">${isGameover?'✓ В БУНКЕРЕ':'⚡ ВЫЖИЛ'}</span>
+      </div>
+    `).join('')}
+    ${isGameover ? `
+      <div class="epilog-box" style="margin-top:12px;">
+        <div class="epilog-lbl">☢ Финал</div>
+        <div class="epilog-text">${G.disaster?.epilogSurvive||''}</div>
+      </div>
+      <div style="height:14px;"></div>
+      <button class="btn-ghost" onclick="location.href='index.html'">↺ НОВАЯ ИГРА</button>
+    ` : `
+      <div style="height:14px;"></div>
+      ${isHost
+        ? `<button class="btn-primary" onclick="nextRound()">▶ СЛЕДУЮЩИЙ РАУНД ${G.round+1}</button>`
+        : `<div style="text-align:center;padding:16px;font-size:11px;color:var(--text-dim);">⧖ Хост запустит следующий раунд…</div>`
+      }
+      <button class="btn-ghost" onclick="location.href='index.html'">↺ ВЫЙТИ</button>
+    `}
+    <div style="height:20px;"></div>
+  `);
+}
+
+// ══════════════════════════════════════
+//   GAMEOVER
+// ══════════════════════════════════════
+function renderGameover() {
+  const alive = G.players.filter(p=>!p.eliminated);
+  const meAlive = alive.some(p=>p.id===PLAYER_ID);
+
+  set(`
+    <div class="gameover-hero">
+      <div class="go-icon">${meAlive?'🏆':'☠'}</div>
+      <div class="go-title" style="color:${meAlive?'var(--gold-light)':'var(--red-light)'};">${meAlive?'ВЫЖИЛИ!':'КОНЕЦ'}</div>
+      <div class="go-sub">${meAlive?'Вы в бункере':'Вы не попали в бункер'}</div>
+    </div>
+    <div style="margin:0 18px 14px;padding:12px 14px;background:rgba(192,56,40,0.07);border:1px solid var(--red-border);border-radius:6px;">
+      <div style="font-family:'Oswald',sans-serif;font-size:14px;color:var(--red-light);letter-spacing:2px;margin-bottom:4px;">${G.disaster?.name||''}</div>
+    </div>
+    <div class="s-hdr">▸ Выжившие в бункере</div>
+    ${alive.map((p,i)=>`
+      <div class="surv-row" style="animation-delay:${i*0.08}s;">
+        <span style="font-size:16px;">${p.emoji}</span>
+        <span class="surv-name">${p.name}</span>
+        <span style="font-size:10px;">${p.cards?.[0]?.value||''}</span>
+        <span class="surv-badge">✓ ВЫЖИЛ</span>
+      </div>
+    `).join('')}
+    <div class="epilog-box" style="margin-top:12px;">
+      <div class="epilog-lbl">☢ Эпилог</div>
+      <div class="epilog-text">${G.disaster?.epilogSurvive||''}</div>
+    </div>
+    <div class="sep"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 18px 14px;">
+      ${[['Раундов',G.round],['Выбыло',G.eliminated?.length||0],['Мест',G.settings.bunkerSize],['Выживших',alive.length]]
+        .map(([l,v])=>`
+          <div style="padding:10px;background:rgba(200,146,58,0.05);border:1px solid var(--border);border-radius:4px;text-align:center;">
+            <div style="font-family:'Oswald',sans-serif;font-size:24px;color:var(--gold);">${v}</div>
+            <div style="font-size:8px;letter-spacing:1px;color:var(--text-dim);text-transform:uppercase;">${l}</div>
+          </div>
+        `).join('')}
+    </div>
+    <button class="btn-primary" onclick="location.href='index.html'" style="animation:glowbtn 2s infinite;">↺ НОВАЯ ИГРА</button>
+    <div style="height:20px;"></div>
+  `);
+}
+
+// ══════════════════════════════════════
+//   ACTIONS
+// ══════════════════════════════════════
+function useSpec() {
+  const me = G.players.find(p=>p.id===PLAYER_ID);
+  if (!me || me.specCard?.used) return;
+  send({ type: 'USE_SPEC', roomCode: ROOM_CODE, playerId: PLAYER_ID });
+  showOverlay(me.specCard.icon, me.specCard.name, me.specCard.desc);
+}
+
+function useAction(i) {
+  const me = G.players.find(p=>p.id===PLAYER_ID);
+  if (!me || me.actionUsed?.[i]) return;
+  send({ type: 'USE_ACTION', roomCode: ROOM_CODE, playerId: PLAYER_ID, idx: i });
+  const ac = me.actionCards[i];
+  showOverlay(ac.icon, ac.name, ac.desc);
+}
+
+function nextRound() {
+  send({ type: 'NEXT_ROUND', roomCode: ROOM_CODE });
+}
+
+// ══════════════════════════════════════
+//   HELPERS
+// ══════════════════════════════════════
+function set(html) { document.getElementById('screenInner').innerHTML = html; }
+
+function showToast(msg) {
+  const t = document.getElementById('toastEl');
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => { t.style.display = 'none'; }, 2600);
+}
+
+function showOverlay(ico, title, body) {
+  document.getElementById('ovIcon').textContent  = ico;
+  document.getElementById('ovTitle').textContent = title;
+  document.getElementById('ovBody').textContent  = body;
+  document.getElementById('overlayEl').style.display = 'flex';
+}
+
+function closeOverlay() {
+  document.getElementById('overlayEl').style.display = 'none';
+}
+
+function updateClock() {
+  const n = new Date();
+  document.getElementById('clockEl').textContent =
+    `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+}
+
+// ══════════════════════════════════════
+//   INIT
+// ══════════════════════════════════════
+if (!ROOM_CODE) {
+  window.location.href = 'index.html';
+} else {
+  updateClock();
+  setInterval(updateClock, 30000);
+  connectWS();
+}
+</script>
+</body>
+</html>
