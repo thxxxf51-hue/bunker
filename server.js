@@ -70,7 +70,10 @@ function handleWS(ws, msg) {
     // Player joins a room via WS
     case 'JOIN_ROOM': {
       const room = rooms.get(msg.roomCode);
-      if (!room) { ws.send(JSON.stringify({ type: 'ERROR', text: 'Комната не найдена' })); return; }
+      if (!room) {
+        ws.send(JSON.stringify({ type: 'ERROR', text: 'Комната не найдена. Игра завершена или не начата.' }));
+        return;
+      }
 
       clients.set(ws, { playerId: msg.playerId, roomCode: msg.roomCode });
       const p = room.players.find(x => x.id === msg.playerId);
@@ -158,6 +161,22 @@ function handleWS(ws, msg) {
       const room = rooms.get(msg.roomCode);
       if (!room) return;
       nextRound(msg.roomCode);
+      break;
+    }
+
+    // Host cancels the game
+    case 'CANCEL_GAME': {
+      const room = rooms.get(msg.roomCode);
+      if (!room) return;
+      const requester = room.players.find(p => p.id === msg.playerId);
+      if (!requester?.isHost) return; // только хост может отменить
+      broadcastAll(msg.roomCode, { type: 'GAME_CANCELLED' });
+      // Удаляем комнату через 3 сек (дать время получить сообщение)
+      setTimeout(() => {
+        clearInterval(roomTimers.get(msg.roomCode));
+        rooms.delete(msg.roomCode);
+        console.log(`🗑 Room ${msg.roomCode} cancelled by host`);
+      }, 3000);
       break;
     }
   }
@@ -402,11 +421,8 @@ bot.start(async (ctx) => {
   await sendBunkerMessage(ctx);
 });
 
-// /бункер — кириллица (ГЛАВНАЯ команда)
-bot.command('бункер', async (ctx) => {
-  await sendBunkerMessage(ctx);
-});
-
+// /bunker — основная команда (Telegram принимает только латиницу в командах)
+// /бункер работает через bot.hears ниже
 // /bunker — латиница
 bot.command('bunker', async (ctx) => {
   await sendBunkerMessage(ctx);
@@ -612,27 +628,32 @@ server.listen(PORT, async () => {
 
   console.log(`🤖 Bot: @${(await bot.telegram.getMe().catch(() => ({ username: '?' }))).username}\n`);
 
-  // Set webhook
+  // Set webhook — отдельно от команд чтобы ошибка команд не роняла webhook
   try {
     await bot.telegram.setWebhook(`${WEBAPP_URL}${WEBHOOK_PATH}`, {
       allowed_updates: ['message', 'callback_query', 'inline_query'],
     });
     console.log('✅ Webhook установлен');
+  } catch (e) {
+    console.error('❌ Webhook error:', e.message);
+    // НЕ запускаем polling — webhook уже мог быть установлен ранее
+    // polling вызывает 409 конфликт если webhook активен
+  }
 
+  // Команды — только латиница (Telegram не принимает кириллицу в командах)
+  try {
     const cmds = [
-      { command: 'бункер',  description: '☢ Создать игру' },
-      { command: 'bunker',  description: '☢ Create game (English)' },
-      { command: 'join',    description: '→ Войти по коду: /join XXXX' },
-      { command: 'rooms',   description: '📋 Активные комнаты' },
+      { command: 'bunker',  description: 'Создать игру / Create game' },
+      { command: 'newgame', description: 'Новая игра' },
+      { command: 'join',    description: 'Войти по коду: /join XXXX' },
+      { command: 'rooms',   description: 'Активные комнаты' },
     ];
     await bot.telegram.setMyCommands(cmds);
     await bot.telegram.setMyCommands(cmds, { scope: { type: 'all_group_chats' } });
     await bot.telegram.setMyCommands(cmds, { scope: { type: 'all_private_chats' } });
-    console.log('✅ Команды установлены для групп и личных чатов');
+    console.log('✅ Команды бота установлены');
   } catch (e) {
-    console.error('❌ Webhook error:', e.message);
-    bot.launch({ allowedUpdates: ['message', 'callback_query'] });
-    console.log('🔄 Запущен polling (локальный режим)');
+    console.error('⚠️ Ошибка команд (не критично):', e.message);
   }
 });
 
