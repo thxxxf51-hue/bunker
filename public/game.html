@@ -126,6 +126,16 @@ function handleMessage(msg) {
       break;
     case 'ERROR':
       showToast(`❌ ${msg.text}`);
+      // Комната не найдена — чистим сессию и на главную
+      if (msg.text && msg.text.includes('не найдена')) {
+        localStorage.removeItem('bunker_session');
+        setTimeout(() => { window.location.href = 'index.html'; }, 2000);
+      }
+      break;
+    case 'GAME_CANCELLED':
+      localStorage.removeItem('bunker_session');
+      showOverlay('❌', 'ИГРА ОТМЕНЕНА', 'Хост отменил игру. Вы будете перенаправлены на главную.');
+      setTimeout(() => { window.location.href = 'index.html'; }, 3000);
       break;
   }
 }
@@ -282,10 +292,12 @@ function renderLobby() {
       <div style="font-size:11px;color:#c07050;line-height:1.6;">${G.disaster?.desc||''}</div>
     </div>
 
-    ${isHost
-      ? `<button class="btn-primary" onclick="startGame()" style="animation:glowbtn 2s infinite;">▶ НАЧАТЬ ИГРУ</button>`
-      : `<div style="text-align:center;padding:16px;font-size:11px;color:var(--text-dim);letter-spacing:2px;">⧖ Ожидаем хоста…</div>`
-    }
+    ${isHost ? `
+      <button class="btn-primary" onclick="startGame()" style="animation:glowbtn 2s infinite;">▶ НАЧАТЬ ИГРУ</button>
+      <button class="btn-ghost" onclick="cancelGame()" style="margin-top:8px;color:var(--red-light);border-color:var(--red-border);">✕ Отменить игру</button>
+    ` : `
+      <div style="text-align:center;padding:16px;font-size:11px;color:var(--text-dim);letter-spacing:2px;">⧖ Ожидаем хоста…</div>
+    `}
     <div style="height:20px;"></div>
   `);
 }
@@ -548,6 +560,8 @@ function renderResult() {
 //   GAMEOVER
 // ══════════════════════════════════════
 function renderGameover() {
+  // Игра окончена — чистим сохранённую сессию
+  localStorage.removeItem('bunker_session');
   const alive = G.players.filter(p=>!p.eliminated);
   const meAlive = alive.some(p=>p.id===PLAYER_ID);
 
@@ -610,6 +624,13 @@ function nextRound() {
   send({ type: 'NEXT_ROUND', roomCode: ROOM_CODE });
 }
 
+function cancelGame() {
+  if (!confirm('Отменить игру? Все игроки будут выброшены.')) return;
+  send({ type: 'CANCEL_GAME', roomCode: ROOM_CODE, playerId: PLAYER_ID });
+  localStorage.removeItem('bunker_session');
+  window.location.href = 'index.html';
+}
+
 // ══════════════════════════════════════
 //   HELPERS
 // ══════════════════════════════════════
@@ -642,9 +663,31 @@ function updateClock() {
 // ══════════════════════════════════════
 //   INIT
 // ══════════════════════════════════════
+
+// Если в URL нет параметров — ищем сохранённую сессию
 if (!ROOM_CODE) {
-  window.location.href = 'index.html';
+  const saved = localStorage.getItem('bunker_session');
+  if (saved) {
+    try {
+      const s = JSON.parse(saved);
+      // Проверяем что сессия не старше 4 часов
+      if (Date.now() - s.ts < 4 * 60 * 60 * 1000) {
+        window.location.href = `game.html?room=${s.room}&pid=${s.pid}`;
+      } else {
+        localStorage.removeItem('bunker_session');
+        window.location.href = 'index.html';
+      }
+    } catch {
+      window.location.href = 'index.html';
+    }
+  } else {
+    window.location.href = 'index.html';
+  }
 } else {
+  // Сохраняем сессию — чтобы восстановить после случайного закрытия
+  localStorage.setItem('bunker_session', JSON.stringify({
+    room: ROOM_CODE, pid: PLAYER_ID, ts: Date.now()
+  }));
   updateClock();
   setInterval(updateClock, 30000);
   connectWS();
